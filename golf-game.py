@@ -8,7 +8,7 @@ class GolfGame:
     The objective is to finish with the lowest possible score after a round.
     """
 
-    def __init__(self, num_players: int = 2):
+    def __init__(self, num_players: int = 2, players = None):
         """
         Initializes the game state.
 
@@ -17,8 +17,19 @@ class GolfGame:
         """
         if not 2 <= num_players <= 4:
             raise ValueError("The game supports 2 to 4 players.")
-        
-        self.players = [Player(f"Player {i+1}", self) for i in range(num_players)]
+        if players is not None and len(players) != num_players:
+            raise ValueError(f"Expected {num_players} players, got {len(players)}.")
+        elif players is None:
+            self.players = [Player(f"Player {i+1}", self) for i in range(num_players)]
+        else:
+            for player in players:
+                if not isinstance(player, Player):
+                    raise TypeError("All players must be instances of the Player class.")
+            for player in players:
+                player.assign_to_game(self)
+
+            self.players = players
+
         self.deck = self._create_shuffled_deck()
         self.discard_pile = []
         self.is_game_over = False
@@ -142,17 +153,58 @@ class GolfGame:
 
 class Player:
     """
-    Represents a player in the Golf card game.
+    Represents a generic player in the Golf card game.
+    This class is intended to be a base class for specific player types.
     """
-    def __init__(self, name: str, game: 'GolfGame'):
+    def __init__(self, name: str):
         self.name = name
-        self.game = game
         self.hand = []
         self.face_up_indices = set()
         
     def __repr__(self):
         return f"Player(name='{self.name}', hand={self.hand})"
+    
+    def assign_to_game(self, game: 'GolfGame'):
+        """
+        Assigns this player to a specific game instance.
+        
+        Args:
+            game: The GolfGame instance to assign this player to.
+        """
+        self.game = game
 
+    def _display_state(self, top_card: str):
+        """Displays the player's current hand and the discard pile."""
+        raise NotImplementedError("Subclass must implement abstract method _display_state")
+
+    def make_move(self, deck: list, discard_pile: list) -> bool:
+        """Handles the player's turn."""
+        raise NotImplementedError("Subclass must implement abstract method make_move")
+
+    def _choose_action(self):
+        """Prompts the player to choose an action (e.g., draw, swap)."""
+        raise NotImplementedError("Subclass must implement abstract method _choose_action")
+
+    def _draw_or_take_card(self, action: str, deck: list, discard_pile: list):
+        """Handles drawing a card from the deck or discard pile."""
+        raise NotImplementedError("Subclass must implement abstract method _draw_or_take_card")
+
+    def _choose_swap_or_discard(self, drawn_card: str):
+        """Prompts the player to swap the drawn card or discard it."""
+        raise NotImplementedError("Subclass must implement abstract method _choose_swap_or_discard")
+
+    def _swap_card(self, drawn_card: str, face_down_indices: list, discard_pile: list):
+        """Handles swapping a drawn card with one from the hand."""
+        raise NotImplementedError("Subclass must implement abstract method _swap_card")
+
+    def _turn_card_over(self, drawn_card: str, face_down_indices: list, discard_pile: list):
+        """Handles turning over a face-down card."""
+        raise NotImplementedError("Subclass must implement abstract method _turn_card_over")
+
+class HumanPlayer(Player):
+    """
+    Represents a human player who interacts via the console.
+    """
     def _display_state(self, top_card: str):
         hand_display = []
         for i in range(2):
@@ -263,8 +315,86 @@ class Player:
                 print("Invalid input. Please enter a valid card position.")
   
         self.face_up_indices.add(swap_idx)
+        if drawn_card:
+            discard_pile.append(drawn_card)
 
+class RandomPlayer(Player):
+    """
+    Represents a player that makes random decisions.
+    This is useful for testing the game mechanics without human input.
+    """
+    def _display_state(self, top_card: str):
+        print(f"\n--- {self.name}'s Turn ---")
+        print(f"Your Hand: {self.hand}")
+        print(f"Stack: {top_card.split('-')[0]}")
+
+    def make_move(self, deck: list, discard_pile: list) -> bool:
+        top_card = discard_pile[-1]
+        self._display_state(top_card)
+        face_down_indices = [i for i in range(4) if i not in self.face_up_indices]
+
+        action = random.choice(['s', 'd', 't'])
+        drawn_card = self._draw_or_take_card(action, deck, discard_pile)
+
+        swap_choice = random.choice(['s', 'd'])
+        if swap_choice == 's':
+            self._swap_card(drawn_card, face_down_indices, discard_pile)
+        else:
+            self._turn_card_over(drawn_card, face_down_indices, discard_pile)
+
+        return len(self.face_up_indices) == 4
+
+    def _choose_action(self):
+        return random.choice(['s', 'd', 't'])
+
+    def _draw_or_take_card(self, action, deck, discard_pile):
+        if action == 'd':
+            if not deck:
+                print("Deck is empty. Reshuffling discard pile.")
+                deck[:] = discard_pile[:-1]
+                random.shuffle(deck)
+                discard_pile[:] = [discard_pile[-1]]
+            drawn_card = deck.pop()
+            print(f"{self.name} drew: {drawn_card.split('-')[0]}")
+            return drawn_card
+        elif action == 's':
+            drawn_card = discard_pile.pop()
+            print(f"{self.name} took from discard pile: {drawn_card.split('-')[0]}")
+            return drawn_card
+        else:
+            return None
+
+    def _choose_swap_or_discard(self, drawn_card):
+        return random.choice(['s', 'd'])
+
+    def _swap_card(self, drawn_card, face_down_indices, discard_pile):
+        if not face_down_indices:
+            print("All cards are face up. Discarding drawn card.")
+            discard_pile.append(drawn_card)
+            return
+        if not drawn_card:
+            return
+        
+        swap_idx = random.choice(face_down_indices)
+        discarded_card = self.hand[swap_idx]
+        self.hand[swap_idx] = drawn_card
+        discard_pile.append(discarded_card)
+        self.face_up_indices.add(swap_idx)
+
+    def _turn_card_over(self, drawn_card, face_down_indices, discard_pile):
+        if not face_down_indices:
+            print("All cards are face up. Discarding drawn card.")
+            if drawn_card:
+                discard_pile.append(drawn_card)
+            return
+        
+        swap_idx = random.choice(face_down_indices)
+        self.face_up_indices.add(swap_idx)
+        if drawn_card:
+            discard_pile.append(drawn_card)
+        print(f"{self.name} turned over card at position {swap_idx}.")
 
 if __name__ == "__main__":
-    game = GolfGame(2)
+    players = [RandomPlayer("Alice"), RandomPlayer("Bob")]
+    game = GolfGame(num_players=2, players=players)
     game.play_game()
