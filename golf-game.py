@@ -1,0 +1,302 @@
+import random
+
+class GolfGame:
+    """
+    Represents the main game logic for a console-based Golf card game.
+
+    The game is played with a standard 52-card deck (without Jokers) for 2 to 4 players.
+    The objective is to finish with the lowest possible score after a round.
+    """
+
+    def __init__(self, num_players: int = 2):
+        """
+        Initializes the game state.
+
+        Args:
+            num_players: The number of players in the game (2 to 4).
+        """
+        if not 2 <= num_players <= 4:
+            raise ValueError("The game supports 2 to 4 players.")
+        
+        self.players = [Player(f"Player {i+1}") for i in range(num_players)]
+        self.deck = self._create_shuffled_deck()
+        self.discard_pile = []
+        self.is_game_over = False
+
+    def _create_shuffled_deck(self):
+        """
+        Creates a standard 52-card deck and shuffles it.
+
+        Returns:
+            A list representing the shuffled deck.
+        """
+        card_values = [str(i) for i in range(2, 11)] + ['J', 'Q', 'K', 'A']
+        suits = ['H', 'D', 'C', 'S']
+        deck = [f"{value}-{suit}" for value in card_values for suit in suits]
+        random.shuffle(deck)
+        return deck
+
+    def _deal_cards(self):
+        """Deals four face-down cards to each player."""
+        for player in self.players:
+            player.hand = [self.deck.pop() for _ in range(4)]
+            # Initially, all cards are face down.
+            player.face_up_indices = set()
+
+    def _initial_peek(self):
+        """
+        Allows each player to peek at two of their four cards at the start.
+        """
+        print("\n--- Initial Peek ---")
+        for player in self.players:
+            # Let the player peek at two cards.
+            print(f"{player.name}, you may peek at two of your cards.")
+            print(f"Cards: [{player.hand[0]}, {player.hand[1]}]")
+            _ = input("Press Enter to continue...")
+            print("\n" * 50)  # Clear the screen for the next player
+
+    def _get_card_value(self, card: str) -> int:
+        """
+        Calculates the score value of a single card.
+
+        Args:
+            card: A string representing the card (e.g., 'K-H').
+
+        Returns:
+            The integer score of the card.
+        """
+        value = card.split('-')[0]
+        if value.isdigit():
+            return int(value)
+        elif value in ['J', 'Q', 'A']:
+            return 10
+        elif value == 'K':
+            return 0
+        else:
+            return 0  # Should not happen
+
+    def _calculate_score(self, player: 'Player') -> int:
+        """
+        Calculates the total score for a player's hand.
+
+        Handles the rule where two of the same card cancel out.
+        
+        Args:
+            player: The Player object whose hand is to be scored.
+
+        Returns:
+            The total integer score.
+        """
+        card_values = [card.split('-')[0] for card in player.hand]
+        value_counts = {value: card_values.count(value) for value in set(card_values)}
+        
+        total_score = 0
+        for value, count in value_counts.items():
+            if count == 2:
+                # Two of the same card cancel out to zero.
+                continue
+            elif count > 2:
+                # If there are three or four of a kind, two cancel out.
+                # The rest count for their value.
+                remaining_cards = count % 2
+                if remaining_cards > 0:
+                    total_score += self._get_card_value(value + '-X') * remaining_cards
+            else:
+                total_score += self._get_card_value(value + '-X')
+
+        return total_score
+
+    def _display_player_state(self, player: 'Player', top_card: str):
+        """
+        Prints the current state of a player's hand and the discard pile.
+
+        Args:
+            player: The Player object to display.
+            top_card: The top card of the discard pile.
+        """
+        hand_display = []
+        for i, card in enumerate(player.hand):
+            if i in player.face_up_indices:
+                hand_display.append(card)
+            else:
+                hand_display.append('X')  # 'X' for face down cards
+        
+        print(f"\n--- {player.name}'s Turn ---")
+        print(f"Your Hand: [{', '.join(hand_display)}]")
+        print(f"Stack: {top_card.split('-')[0]}")
+
+    def play_game(self):
+        """Manages the main game loop until a player wins."""
+        print("Welcome to Python Golf!")
+        self._deal_cards()
+        self._initial_peek()
+
+        # Start the discard pile with one card.
+        if not self.deck:
+            print("Not enough cards to play.")
+            return
+
+        self.discard_pile.append(self.deck.pop())
+
+        turn_count = 0
+        while not self.is_game_over:
+            turn_count += 1
+            print(f"\nRound {turn_count}")
+
+            for player in self.players:
+                if self.is_game_over:
+                    break
+
+                top_card = self.discard_pile[-1]
+                self._display_player_state(player, top_card)
+
+                # Each turn, the player must turn over one of their cards.
+                face_down_indices = [i for i in range(4) if i not in player.face_up_indices]
+
+                action = None
+                while action not in ['s', 't', 'd']:
+                    action = input("Do you want to (s)wap for the current card, (d)raw a new one or (t)urn over one of your cards? ").lower()
+                
+                drawn_card = None
+                if action == 'd':
+                    # Action block to draw a new card.
+                    if not self.deck:
+                        print("Deck is empty. Reshuffling discard pile.")
+                        self.deck = self.discard_pile[:-1]
+                        random.shuffle(self.deck)
+                        self.discard_pile = [self.discard_pile[-1]]
+                    drawn_card = self.deck.pop()
+                    print(f"You drew: {drawn_card.split('-')[0]}")
+
+                elif action == 's':
+                    # Action block to take the current card.
+                    drawn_card = self.discard_pile.pop()
+                    print(f"You took from discard pile: {drawn_card.split('-')[0]}")
+
+                else: # means action == 't'
+                    drawn_card = None
+
+                # Player chooses which face-down card to turn over and potentially swap.
+                if drawn_card: 
+                    swap_choice = input(
+                        "Do you want to (s)wap with a card in your hand, or (d)iscard the drawn card? "
+                    ).lower()
+                else:
+                    swap_choice = 'd'
+
+                if swap_choice == 's':
+                    if not face_down_indices:
+                        print("All your cards are already face up. You must discard.")
+                        self.discard_pile.append(drawn_card)
+                    else:
+                        print("Your face-down card positions are:")
+                        for idx in face_down_indices:
+                            if idx < 2:
+                                print(f"{idx}: {player.hand[idx]}")
+                            else:
+                                print(f"{idx} : ???")
+
+                        swap_idx = -1
+                        while swap_idx not in face_down_indices:
+                            try:
+                                swap_idx = int(input("Enter the position (0-3) of the card you want to turn over and swap: "))
+                                if swap_idx not in range(4):
+                                    raise ValueError
+                                if swap_idx not in face_down_indices:
+                                    print("That card is already face up. Choose a face-down card.")
+                            except (ValueError, IndexError):
+                                print("Invalid input. Please enter a valid card position.")
+
+                        discarded_card = player.hand[swap_idx]
+                        player.hand[swap_idx] = drawn_card
+                        self.discard_pile.append(discarded_card)
+                        player.face_up_indices.add(swap_idx)
+
+                else: # 'd'
+                    if not face_down_indices:
+                        print("All your cards are already face up. You can't turn another one up.")
+                        self.discard_pile.append(drawn_card)
+                    else:
+                        print("Your face-down card positions are:")
+                        for idx in face_down_indices:
+                            if idx < 2:
+                                print(f"{idx}: {player.hand[idx]}")
+                            else:
+                                print(f"{idx} : ???")
+                        
+                        swap_idx = -1
+                        while swap_idx not in face_down_indices:
+                            try:
+                                swap_idx = int(input("Enter the position (0-3) of the card you want to turn over: "))
+                                if swap_idx not in range(4):
+                                    raise ValueError
+                                if swap_idx not in face_down_indices:
+                                    print("That card is already face up. Choose a face-down card.")
+                            except (ValueError, IndexError):
+                                print("Invalid input. Please enter a valid card position.")
+
+                        player.face_up_indices.add(swap_idx)
+                        if drawn_card:
+                            self.discard_pile.append(drawn_card)
+
+                # Check if all cards are face up
+                if len(player.face_up_indices) == 4:
+                    self.is_game_over = True
+                    print(f"\n{player.name} has turned all their cards face up! The game ends.")
+                    break
+
+                print("\n" * 50)  # Clear the screen for the next player
+
+        self.end_game()
+
+    def end_game(self):
+        """
+        Calculates and displays the final scores for all players.
+        """
+        final_scores = []
+        for player in self.players:
+            score = self._calculate_score(player)
+            final_scores.append((player.name, score))
+            print(f"{player.name}'s final hand: {player.hand}")
+            print(f"{player.name}'s score: {score}")
+
+        final_scores.sort(key=lambda x: x[1])
+
+        print("\n--- Final Results ---")
+        for rank, (name, score) in enumerate(final_scores):
+            print(f"#{rank+1}: {name} with a score of {score}")
+
+        winner_name = final_scores[0][0]
+        print(f"\n🏆 The winner is {winner_name} with the lowest score! 🏆")
+
+
+class Player:
+    """
+    Represents a player in the Golf card game.
+    """
+    def __init__(self, name: str):
+        """
+        Initializes a player.
+
+        Args:
+            name: The name of the player.
+        """
+        self.name = name
+        self.hand = []
+        self.face_up_indices = set()
+        
+    def __repr__(self):
+        """String representation of the player object."""
+        return f"Player(name='{self.name}', hand={self.hand})"
+
+
+if __name__ == "__main__":
+    # Example of how to play the game with human players.
+    try:
+        num_players_input = int(input("Enter number of players (2-4): "))
+        game = GolfGame(num_players_input)
+        game.play_game()
+    except ValueError as e:
+        print(f"Error: {e}")
+        print("Please restart and enter a number from 2 to 4.")
+
