@@ -18,7 +18,7 @@ class GolfGame:
         if not 2 <= num_players <= 4:
             raise ValueError("The game supports 2 to 4 players.")
         
-        self.players = [Player(f"Player {i+1}") for i in range(num_players)]
+        self.players = [Player(f"Player {i+1}", self) for i in range(num_players)]
         self.deck = self._create_shuffled_deck()
         self.discard_pile = []
         self.is_game_over = False
@@ -42,18 +42,6 @@ class GolfGame:
             player.hand = [self.deck.pop() for _ in range(4)]
             # Initially, all cards are face down.
             player.face_up_indices = set()
-
-    def _initial_peek(self):
-        """
-        Allows each player to peek at two of their four cards at the start.
-        """
-        print("\n--- Initial Peek ---")
-        for player in self.players:
-            # Let the player peek at two cards.
-            print(f"{player.name}, you may peek at two of your cards.")
-            print(f"Cards: [{player.hand[0]}, {player.hand[1]}]")
-            _ = input("Press Enter to continue...")
-            print("\n" * 50)  # Clear the screen for the next player
 
     def _get_card_value(self, card: str) -> int:
         """
@@ -106,30 +94,10 @@ class GolfGame:
 
         return total_score
 
-    def _display_player_state(self, player: 'Player', top_card: str):
-        """
-        Prints the current state of a player's hand and the discard pile.
-
-        Args:
-            player: The Player object to display.
-            top_card: The top card of the discard pile.
-        """
-        hand_display = []
-        for i, card in enumerate(player.hand):
-            if i in player.face_up_indices:
-                hand_display.append(card)
-            else:
-                hand_display.append('X')  # 'X' for face down cards
-        
-        print(f"\n--- {player.name}'s Turn ---")
-        print(f"Your Hand: [{', '.join(hand_display)}]")
-        print(f"Stack: {top_card.split('-')[0]}")
-
     def play_game(self):
         """Manages the main game loop until a player wins."""
         print("Welcome to Python Golf!")
         self._deal_cards()
-        self._initial_peek()
 
         # Start the discard pile with one card.
         if not self.deck:
@@ -147,105 +115,7 @@ class GolfGame:
                 if self.is_game_over:
                     break
 
-                top_card = self.discard_pile[-1]
-                self._display_player_state(player, top_card)
-
-                # Each turn, the player must turn over one of their cards.
-                face_down_indices = [i for i in range(4) if i not in player.face_up_indices]
-
-                action = None
-                while action not in ['s', 't', 'd']:
-                    action = input("Do you want to (s)wap for the current card, (d)raw a new one or (t)urn over one of your cards? ").lower()
-                
-                drawn_card = None
-                if action == 'd':
-                    # Action block to draw a new card.
-                    if not self.deck:
-                        print("Deck is empty. Reshuffling discard pile.")
-                        self.deck = self.discard_pile[:-1]
-                        random.shuffle(self.deck)
-                        self.discard_pile = [self.discard_pile[-1]]
-                    drawn_card = self.deck.pop()
-                    print(f"You drew: {drawn_card.split('-')[0]}")
-
-                elif action == 's':
-                    # Action block to take the current card.
-                    drawn_card = self.discard_pile.pop()
-                    print(f"You took from discard pile: {drawn_card.split('-')[0]}")
-
-                else: # means action == 't'
-                    drawn_card = None
-
-                # Player chooses which face-down card to turn over and potentially swap.
-                if drawn_card: 
-                    swap_choice = input(
-                        "Do you want to (s)wap with a card in your hand, or (d)iscard the drawn card? "
-                    ).lower()
-                else:
-                    swap_choice = 'd'
-
-                if swap_choice == 's':
-                    if not face_down_indices:
-                        print("All your cards are already face up. You must discard.")
-                        self.discard_pile.append(drawn_card)
-                    else:
-                        print("Your face-down card positions are:")
-                        for idx in face_down_indices:
-                            if idx < 2:
-                                print(f"{idx}: {player.hand[idx]}")
-                            else:
-                                print(f"{idx} : ???")
-
-                        swap_idx = -1
-                        while swap_idx not in face_down_indices:
-                            try:
-                                swap_idx = int(input("Enter the position (0-3) of the card you want to turn over and swap: "))
-                                if swap_idx not in range(4):
-                                    raise ValueError
-                                if swap_idx not in face_down_indices:
-                                    print("That card is already face up. Choose a face-down card.")
-                            except (ValueError, IndexError):
-                                print("Invalid input. Please enter a valid card position.")
-
-                        discarded_card = player.hand[swap_idx]
-                        player.hand[swap_idx] = drawn_card
-                        self.discard_pile.append(discarded_card)
-                        player.face_up_indices.add(swap_idx)
-
-                else: # 'd'
-                    if not face_down_indices:
-                        print("All your cards are already face up. You can't turn another one up.")
-                        self.discard_pile.append(drawn_card)
-                    else:
-                        print("Your face-down card positions are:")
-                        for idx in face_down_indices:
-                            if idx < 2:
-                                print(f"{idx}: {player.hand[idx]}")
-                            else:
-                                print(f"{idx} : ???")
-                        
-                        swap_idx = -1
-                        while swap_idx not in face_down_indices:
-                            try:
-                                swap_idx = int(input("Enter the position (0-3) of the card you want to turn over: "))
-                                if swap_idx not in range(4):
-                                    raise ValueError
-                                if swap_idx not in face_down_indices:
-                                    print("That card is already face up. Choose a face-down card.")
-                            except (ValueError, IndexError):
-                                print("Invalid input. Please enter a valid card position.")
-
-                        player.face_up_indices.add(swap_idx)
-                        if drawn_card:
-                            self.discard_pile.append(drawn_card)
-
-                # Check if all cards are face up
-                if len(player.face_up_indices) == 4:
-                    self.is_game_over = True
-                    print(f"\n{player.name} has turned all their cards face up! The game ends.")
-                    break
-
-                print("\n" * 50)  # Clear the screen for the next player
+                self.is_game_over = player.make_move(self.deck, self.discard_pile)
 
         self.end_game()
 
@@ -274,29 +144,127 @@ class Player:
     """
     Represents a player in the Golf card game.
     """
-    def __init__(self, name: str):
-        """
-        Initializes a player.
-
-        Args:
-            name: The name of the player.
-        """
+    def __init__(self, name: str, game: 'GolfGame'):
         self.name = name
+        self.game = game
         self.hand = []
         self.face_up_indices = set()
         
     def __repr__(self):
-        """String representation of the player object."""
         return f"Player(name='{self.name}', hand={self.hand})"
+
+    def _display_state(self, top_card: str):
+        hand_display = []
+        for i in range(2):
+            if i in self.face_up_indices:
+                hand_display.append(f"{self.hand[i]} (up)")
+            else:
+                hand_display.append(f"{self.hand[i]} (down)")
+        print(f"\n--- {self.name}'s Turn ---")
+        print(f"Your Hand [0,1]: [{', '.join(hand_display)}]")
+        print(f"Stack: {top_card.split('-')[0]}")
+
+    def make_move(self, deck: list, discard_pile: list) -> bool:
+        top_card = discard_pile[-1]
+        self._display_state(top_card)
+        face_down_indices = [i for i in range(4) if i not in self.face_up_indices]
+
+        action = self._choose_action()
+        drawn_card = self._draw_or_take_card(action, deck, discard_pile)
+
+        swap_choice = self._choose_swap_or_discard(drawn_card)
+        if swap_choice == 's':
+            self._swap_card(drawn_card, face_down_indices, discard_pile)
+        else:
+            self._turn_card_over(drawn_card, face_down_indices, discard_pile)
+
+        print("\n" * 50)
+        return len(self.face_up_indices) == 4
+
+    def _choose_action(self):
+        action = None
+        while action not in ['s', 't', 'd']:
+            action = input("Do you want to (s)wap for the current card, "
+                           "(d)raw a new one or (t)urn over one of your cards? ").lower()
+        return action
+
+    def _draw_or_take_card(self, action, deck, discard_pile):
+        if action == 'd':
+            if not deck:
+                print("Deck is empty. Reshuffling discard pile.")
+                deck[:] = discard_pile[:-1]
+                random.shuffle(deck)
+                discard_pile[:] = [discard_pile[-1]]
+            drawn_card = deck.pop()
+            print(f"You drew: {drawn_card.split('-')[0]}")
+            return drawn_card
+        elif action == 's':
+            drawn_card = discard_pile.pop()
+            print(f"You took from discard pile: {drawn_card.split('-')[0]}")
+            return drawn_card
+        else:
+            return None
+
+    def _choose_swap_or_discard(self, drawn_card):
+        if drawn_card:
+            swap_choice = input("Do you want to (s)wap with a card in your hand, or (d)iscard the drawn card? ").lower()
+        else:
+            swap_choice = 'd'
+        return swap_choice
+
+    def _swap_card(self, drawn_card, face_down_indices, discard_pile):
+        if not face_down_indices:
+            print("All your cards are already face up. You must discard.")
+            discard_pile.append(drawn_card)
+            return
+        print("Your face-down card positions are:")
+        for idx in face_down_indices:
+            if idx < 2:
+                print(f"{idx}: {self.hand[idx]}")
+            else:
+                print(f"{idx} : ???")
+        swap_idx = -1
+        while swap_idx not in face_down_indices:
+            try:
+                swap_idx = int(input("Enter the position (0-3) of the card you want to turn over and swap: "))
+                if swap_idx not in range(4):
+                    raise ValueError
+                if swap_idx not in face_down_indices:
+                    print("That card is already face up. Choose a face-down card.")
+            except (ValueError, IndexError):
+                print("Invalid input. Please enter a valid card position.")
+        discarded_card = self.hand[swap_idx]
+        self.hand[swap_idx] = drawn_card
+        discard_pile.append(discarded_card)
+        self.face_up_indices.add(swap_idx)
+
+    def _turn_card_over(self, drawn_card, face_down_indices, discard_pile):
+        if not face_down_indices:
+            print("All your cards are already face up. You can't turn another one up.")
+            if drawn_card:
+                discard_pile.append(drawn_card)
+            return
+        print("Your face-down card positions are:")
+        for idx in face_down_indices:
+            if idx < 2:
+                print(f"{idx}: {self.hand[idx]}")
+            else:
+                print(f"{idx} : ???")
+        swap_idx = -1
+  
+        while swap_idx not in face_down_indices:
+            try:
+                swap_idx = int(input("Enter the position (0-3) of the card you want to turn over: "))
+                if swap_idx not in range(4):
+                    raise ValueError
+                if swap_idx not in face_down_indices:
+                    print("That card is already face up. Choose a face-down card.")
+            except (ValueError, IndexError):
+                print("Invalid input. Please enter a valid card position.")
+  
+        self.face_up_indices.add(swap_idx)
 
 
 if __name__ == "__main__":
-    # Example of how to play the game with human players.
-    try:
-        num_players_input = int(input("Enter number of players (2-4): "))
-        game = GolfGame(num_players_input)
-        game.play_game()
-    except ValueError as e:
-        print(f"Error: {e}")
-        print("Please restart and enter a number from 2 to 4.")
-
+    game = GolfGame(2)
+    game.play_game()
