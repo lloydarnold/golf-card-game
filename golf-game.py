@@ -1,4 +1,5 @@
 import random
+import logging
 
 class GolfGame:
     """
@@ -107,12 +108,12 @@ class GolfGame:
 
     def play_game(self):
         """Manages the main game loop until a player wins."""
-        print("Welcome to Python Golf!")
+        logging.info("Welcome to Python Golf!")
         self._deal_cards()
 
         # Start the discard pile with one card.
         if not self.deck:
-            print("Not enough cards to play.")
+            logging.info("Not enough cards to play.")
             return
 
         self.discard_pile.append(self.deck.pop())
@@ -120,7 +121,7 @@ class GolfGame:
         turn_count = 0
         while not self.is_game_over:
             turn_count += 1
-            print(f"\nRound {turn_count}")
+            logging.info(f"\nRound {turn_count}")
 
             for player in self.players:
                 if self.is_game_over:
@@ -138,17 +139,17 @@ class GolfGame:
         for player in self.players:
             score = self._calculate_score(player)
             final_scores.append((player.name, score))
-            print(f"{player.name}'s final hand: {player.hand}")
-            print(f"{player.name}'s score: {score}")
+            logging.info(f"{player.name}'s final hand: {player.hand}")
+            logging.info(f"{player.name}'s score: {score}")
 
         final_scores.sort(key=lambda x: x[1])
 
-        print("\n--- Final Results ---")
+        logging.info("\n--- Final Results ---")
         for rank, (name, score) in enumerate(final_scores):
-            print(f"#{rank+1}: {name} with a score of {score}")
+            logging.info(f"#{rank+1}: {name} with a score of {score}")
 
         winner_name = final_scores[0][0]
-        print(f"\n🏆 The winner is {winner_name} with the lowest score! 🏆")
+        logging.info(f"The winner is {winner_name} with the lowest score!")
 
 
 class Player:
@@ -324,9 +325,9 @@ class RandomPlayer(Player):
     This is useful for testing the game mechanics without human input.
     """
     def _display_state(self, top_card: str):
-        print(f"\n--- {self.name}'s Turn ---")
-        print(f"Your Hand: {self.hand}")
-        print(f"Stack: {top_card.split('-')[0]}")
+        logging.info(f"\n--- {self.name}'s Turn ---")
+        logging.info(f"Your Hand: {self.hand}")
+        logging.info(f"Stack: {top_card.split('-')[0]}")
 
     def make_move(self, deck: list, discard_pile: list) -> bool:
         top_card = discard_pile[-1]
@@ -350,16 +351,16 @@ class RandomPlayer(Player):
     def _draw_or_take_card(self, action, deck, discard_pile):
         if action == 'd':
             if not deck:
-                print("Deck is empty. Reshuffling discard pile.")
+                logging.info("Deck is empty. Reshuffling discard pile.")
                 deck[:] = discard_pile[:-1]
                 random.shuffle(deck)
                 discard_pile[:] = [discard_pile[-1]]
             drawn_card = deck.pop()
-            print(f"{self.name} drew: {drawn_card.split('-')[0]}")
+            logging.info(f"{self.name} drew: {drawn_card.split('-')[0]}")
             return drawn_card
         elif action == 's':
             drawn_card = discard_pile.pop()
-            print(f"{self.name} took from discard pile: {drawn_card.split('-')[0]}")
+            logging.info(f"{self.name} took from discard pile: {drawn_card.split('-')[0]}")
             return drawn_card
         else:
             return None
@@ -369,7 +370,7 @@ class RandomPlayer(Player):
 
     def _swap_card(self, drawn_card, face_down_indices, discard_pile):
         if not face_down_indices:
-            print("All cards are face up. Discarding drawn card.")
+            logging.info("All cards are face up. Discarding drawn card.")
             discard_pile.append(drawn_card)
             return
         if not drawn_card:
@@ -383,7 +384,7 @@ class RandomPlayer(Player):
 
     def _turn_card_over(self, drawn_card, face_down_indices, discard_pile):
         if not face_down_indices:
-            print("All cards are face up. Discarding drawn card.")
+            logging.info("All cards are face up. Discarding drawn card.")
             if drawn_card:
                 discard_pile.append(drawn_card)
             return
@@ -392,9 +393,11 @@ class RandomPlayer(Player):
         self.face_up_indices.add(swap_idx)
         if drawn_card:
             discard_pile.append(drawn_card)
-        print(f"{self.name} turned over card at position {swap_idx}.")
+        logging.info(f"{self.name} turned over card at position {swap_idx}.")
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+
     players = [RandomPlayer("Alice"), RandomPlayer("Bob")]
     game = GolfGame(num_players=2, players=players)
     game.play_game()
