@@ -337,10 +337,11 @@ class RandomPlayer(Player):
         self._display_state(top_card)
         face_down_indices = [i for i in range(4) if i not in self.face_up_indices]
 
-        action = random.choice(['s', 'd', 't'])
+        action = self._choose_action()
         drawn_card = self._draw_or_take_card(action, deck, discard_pile)
 
-        swap_choice = random.choice(['s', 'd'])
+        swap_choice = self._choose_swap_or_discard(drawn_card)
+        
         if swap_choice == 's':
             self._swap_card(drawn_card, face_down_indices, discard_pile)
         else:
@@ -398,11 +399,126 @@ class RandomPlayer(Player):
             discard_pile.append(drawn_card)
         logging.debug(f"{self.name} turned over card at position {swap_idx}.")
 
+class GreedyPlayer(Player):
+    """
+    Represents a player that adopts a greedy strategy and never looks at their own cards.
+    """
+    def _display_state(self, top_card: str):
+        logging.debug(f"\n--- {self.name}'s Turn ---")
+        logging.debug(f"Your Hand: {self.hand}")
+        logging.debug(f"Stack: {top_card.split('-')[0]}")
+
+    def make_move(self, deck: list, discard_pile: list) -> bool:
+        top_card = discard_pile[-1]
+        self._display_state(top_card)
+        face_down_indices = [i for i in range(4) if i not in self.face_up_indices]
+
+        action = self._choose_action(top_card)
+        drawn_card = self._draw_or_take_card(action, deck, discard_pile)
+
+        swap_choice = self._choose_swap_or_discard(drawn_card)
+        if swap_choice == 's':
+            self._swap_card(drawn_card, face_down_indices, discard_pile)
+        else:
+            self._turn_card_over(drawn_card, face_down_indices, discard_pile)
+
+        return len(self.face_up_indices) == 4
+
+    def _choose_action(self, top_card: str):
+        """ Chooses to take showing card or draw from deck based on the top card value."""
+        available_val = self._card_value(top_card)
+        if available_val < 6:
+            return 's'
+        else:
+            return 'd'
+
+    def _card_value(self, card: str) -> int:
+        """
+        Returns the value of a card for scoring purposes.
+        """
+        if (face_val := card.split('-')[0]) in ['Q', 'J']:
+            int_val = 10
+        elif face_val == 'K':
+            int_val = 0
+        elif face_val == 'A':
+            int_val = 1
+        elif face_val.isdigit():  # These cases are exhaustive
+            int_val = int(face_val)   
+        else:
+            raise ValueError(f"Invalid card value: {card}")
+
+        return int_val
+        
+    def _draw_or_take_card(self, action, deck, discard_pile):
+        if action == 'd':
+            if not deck:
+                logging.debug("Deck is empty. Reshuffling discard pile.")
+                deck[:] = discard_pile[:-1]
+                random.shuffle(deck)
+                discard_pile[:] = [discard_pile[-1]]
+            drawn_card = deck.pop()
+            logging.debug(f"{self.name} drew: {drawn_card.split('-')[0]}")
+            return drawn_card
+        elif action == 's':
+            drawn_card = discard_pile.pop()
+            logging.debug(f"{self.name} took from discard pile: {drawn_card.split('-')[0]}")
+            return drawn_card
+        else:
+            return None
+
+    def _choose_swap_or_discard(self, drawn_card: str):
+        """ Chooses to swap card or keep card, based on the top card value."""
+        available_val = self._card_value(drawn_card)
+        if available_val < 6:
+            return 's'
+        else:
+            return 'd'
+
+    def _swap_card(self, drawn_card, face_down_indices, discard_pile):
+        if not face_down_indices:
+            logging.debug("All cards are face up. Discarding drawn card.")
+            discard_pile.append(drawn_card)
+            return
+        if not drawn_card:
+            return
+        
+        max = -1
+        for idx in face_down_indices:
+            card_value = self._card_value(self.hand[idx])
+            if card_value > max:
+                max = card_value
+                swap_idx = idx
+        
+        discarded_card = self.hand[swap_idx]
+        self.hand[swap_idx] = drawn_card
+        discard_pile.append(discarded_card)
+        self.face_up_indices.add(swap_idx)
+
+    def _turn_card_over(self, drawn_card, face_down_indices, discard_pile):
+        if not face_down_indices:
+            logging.debug("All cards are face up. Discarding drawn card.")
+            if drawn_card:
+                discard_pile.append(drawn_card)
+            return
+        
+        min = 999
+        for idx in face_down_indices:
+            card_value = self._card_value(self.hand[idx])
+            if card_value < min:
+                min = card_value
+                swap_idx = idx
+
+        self.face_up_indices.add(swap_idx)
+        if drawn_card:
+            discard_pile.append(drawn_card)
+        logging.debug(f"{self.name} turned over card at position {swap_idx}.")
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)    
     scores = []
-    for i in range(100000):
-        players = [RandomPlayer("Alice"), RandomPlayer("Bob")]
+    for i in range(500000):
+        players = [GreedyPlayer("Alice"), GreedyPlayer("Bob")]
         game = GolfGame(num_players=2, players=players)
 
         scores.append(game.play_game())
