@@ -21,7 +21,7 @@ class GolfGame:
         if players is not None and len(players) != num_players:
             raise ValueError(f"Expected {num_players} players, got {len(players)}.")
         elif players is None:
-            self.players = [Player(f"Player {i+1}", self) for i in range(num_players)]
+            self.players = [HumanPlayer(f"Player {i+1}", self) for i in range(num_players)]
         else:
             for player in players:
                 if not isinstance(player, Player):
@@ -55,9 +55,10 @@ class GolfGame:
             # Initially, all cards are face down.
             player.face_up_indices = set()
 
-    def _get_card_value(self, card: str) -> int:
+    def get_card_value(self, card: str) -> int:
         """
         Calculates the score value of a single card.
+        This method is now public for use by Player subclasses.
 
         Args:
             card: A string representing the card (e.g., 'K-H').
@@ -100,9 +101,9 @@ class GolfGame:
                 # The rest count for their value.
                 remaining_cards = count % 2
                 if remaining_cards > 0:
-                    total_score += self._get_card_value(value + '-X') * remaining_cards
+                    total_score += self.get_card_value(value + '-X') * remaining_cards
             else:
-                total_score += self._get_card_value(value + '-X')
+                total_score += self.get_card_value(value + '-X')
 
         return total_score
 
@@ -113,7 +114,7 @@ class GolfGame:
 
         # Start the discard pile with one card.
         if not self.deck:
-            logging.debug("Not enough cards to play.")
+            logging.error("Not enough cards to play.")
             return
 
         self.discard_pile.append(self.deck.pop())
@@ -121,7 +122,7 @@ class GolfGame:
         turn_count = 0
         while not self.is_game_over:
             turn_count += 1
-            logging.debug(f"Round {turn_count}")
+            logging.debug(f"\nRound {turn_count}")
 
             for player in self.players:
                 if self.is_game_over:
@@ -185,39 +186,23 @@ class Player:
         """Handles the player's turn."""
         raise NotImplementedError("Subclass must implement abstract method make_move")
 
-    def _choose_action(self):
-        """Prompts the player to choose an action (e.g., draw, swap)."""
-        raise NotImplementedError("Subclass must implement abstract method _choose_action")
-
-    def _draw_or_take_card(self, action: str, deck: list, discard_pile: list):
-        """Handles drawing a card from the deck or discard pile."""
-        raise NotImplementedError("Subclass must implement abstract method _draw_or_take_card")
-
-    def _choose_swap_or_discard(self, drawn_card: str):
-        """Prompts the player to swap the drawn card or discard it."""
-        raise NotImplementedError("Subclass must implement abstract method _choose_swap_or_discard")
-
-    def _swap_card(self, drawn_card: str, face_down_indices: list, discard_pile: list):
-        """Handles swapping a drawn card with one from the hand."""
-        raise NotImplementedError("Subclass must implement abstract method _swap_card")
-
-    def _turn_card_over(self, drawn_card: str, face_down_indices: list, discard_pile: list):
-        """Handles turning over a face-down card."""
-        raise NotImplementedError("Subclass must implement abstract method _turn_card_over")
-
 class HumanPlayer(Player):
     """
     Represents a human player who interacts via the console.
     """
     def _display_state(self, top_card: str):
         hand_display = []
-        for i in range(2):
-            if i in self.face_up_indices:
-                hand_display.append(f"{self.hand[i]} (up)")
+        for i in range(len(self.hand)):
+            if i < 2:
+                card_value = self.game.get_card_value(self.hand[i])
+                if i in self.face_up_indices:
+                    hand_display.append(f"{card_value} (up)")
+                else:
+                    hand_display.append(f"{card_value} (down)")
             else:
-                hand_display.append(f"{self.hand[i]} (down)")
+                hand_display.append('X')
         print(f"\n--- {self.name}'s Turn ---")
-        print(f"Your Hand [0,1]: [{', '.join(hand_display)}]")
+        print(f"Your Hand: [{', '.join(hand_display)}]")
         print(f"Stack: {top_card.split('-')[0]}")
 
     def make_move(self, deck: list, discard_pile: list) -> bool:
@@ -228,12 +213,15 @@ class HumanPlayer(Player):
         action = self._choose_action()
         drawn_card = self._draw_or_take_card(action, deck, discard_pile)
 
-        swap_choice = self._choose_swap_or_discard(drawn_card)
-        if swap_choice == 's':
-            self._swap_card(drawn_card, face_down_indices, discard_pile)
-        else:
-            self._turn_card_over(drawn_card, face_down_indices, discard_pile)
-
+        if action == 't':
+            self._turn_card_over(face_down_indices)
+        elif drawn_card:
+            swap_choice = self._choose_swap_or_discard(drawn_card)
+            if swap_choice == 's':
+                self._swap_card(drawn_card, face_down_indices, discard_pile)
+            else:
+                discard_pile.append(drawn_card)
+        
         print("\n" * 50)
         return len(self.face_up_indices) == 4
 
@@ -294,12 +282,11 @@ class HumanPlayer(Player):
         discard_pile.append(discarded_card)
         self.face_up_indices.add(swap_idx)
 
-    def _turn_card_over(self, drawn_card, face_down_indices, discard_pile):
+    def _turn_card_over(self, face_down_indices):
         if not face_down_indices:
             print("All your cards are already face up. You can't turn another one up.")
-            if drawn_card:
-                discard_pile.append(drawn_card)
             return
+
         print("Your face-down card positions are:")
         for idx in face_down_indices:
             if idx < 2:
@@ -307,7 +294,6 @@ class HumanPlayer(Player):
             else:
                 print(f"{idx} : ???")
         swap_idx = -1
-  
         while swap_idx not in face_down_indices:
             try:
                 swap_idx = int(input("Enter the position (0-3) of the card you want to turn over: "))
@@ -317,10 +303,8 @@ class HumanPlayer(Player):
                     print("That card is already face up. Choose a face-down card.")
             except (ValueError, IndexError):
                 print("Invalid input. Please enter a valid card position.")
-  
+        
         self.face_up_indices.add(swap_idx)
-        if drawn_card:
-            discard_pile.append(drawn_card)
 
 class RandomPlayer(Player):
     """
@@ -340,12 +324,14 @@ class RandomPlayer(Player):
         action = self._choose_action()
         drawn_card = self._draw_or_take_card(action, deck, discard_pile)
 
-        swap_choice = self._choose_swap_or_discard(drawn_card)
-        
-        if swap_choice == 's':
-            self._swap_card(drawn_card, face_down_indices, discard_pile)
-        else:
-            self._turn_card_over(drawn_card, face_down_indices, discard_pile)
+        if action == 't':
+            self._turn_card_over(face_down_indices)
+        elif drawn_card:
+            swap_choice = self._choose_swap_or_discard()
+            if swap_choice == 's':
+                self._swap_card(drawn_card, face_down_indices, discard_pile)
+            else:
+                discard_pile.append(drawn_card)
 
         return len(self.face_up_indices) == 4
 
@@ -369,7 +355,7 @@ class RandomPlayer(Player):
         else:
             return None
 
-    def _choose_swap_or_discard(self, drawn_card):
+    def _choose_swap_or_discard(self):
         return random.choice(['s', 'd'])
 
     def _swap_card(self, drawn_card, face_down_indices, discard_pile):
@@ -386,17 +372,13 @@ class RandomPlayer(Player):
         discard_pile.append(discarded_card)
         self.face_up_indices.add(swap_idx)
 
-    def _turn_card_over(self, drawn_card, face_down_indices, discard_pile):
+    def _turn_card_over(self, face_down_indices):
         if not face_down_indices:
-            logging.debug("All cards are face up. Discarding drawn card.")
-            if drawn_card:
-                discard_pile.append(drawn_card)
+            logging.debug("All cards are face up. Can't turn another one.")
             return
         
         swap_idx = random.choice(face_down_indices)
         self.face_up_indices.add(swap_idx)
-        if drawn_card:
-            discard_pile.append(drawn_card)
         logging.debug(f"{self.name} turned over card at position {swap_idx}.")
 
 class GreedyPlayer(Player):
@@ -416,38 +398,24 @@ class GreedyPlayer(Player):
         action = self._choose_action(top_card)
         drawn_card = self._draw_or_take_card(action, deck, discard_pile)
 
-        swap_choice = self._choose_swap_or_discard(drawn_card)
-        if swap_choice == 's':
-            self._swap_card(drawn_card, face_down_indices, discard_pile)
-        else:
-            self._turn_card_over(drawn_card, face_down_indices, discard_pile)
+        if action == 't':
+            self._turn_card_over(face_down_indices)
+        elif drawn_card:
+            swap_choice = self._choose_swap_or_discard(drawn_card)
+            if swap_choice == 's':
+                self._swap_card(drawn_card, face_down_indices, discard_pile)
+            else:
+                discard_pile.append(drawn_card)
 
         return len(self.face_up_indices) == 4
 
     def _choose_action(self, top_card: str):
         """ Chooses to take showing card or draw from deck based on the top card value."""
-        available_val = self._card_value(top_card)
+        available_val = self.game.get_card_value(top_card)
         if available_val < 6:
             return 's'
         else:
             return 'd'
-
-    def _card_value(self, card: str) -> int:
-        """
-        Returns the value of a card for scoring purposes.
-        """
-        if (face_val := card.split('-')[0]) in ['Q', 'J']:
-            int_val = 10
-        elif face_val == 'K':
-            int_val = 0
-        elif face_val == 'A':
-            int_val = 1
-        elif face_val.isdigit():  # These cases are exhaustive
-            int_val = int(face_val)   
-        else:
-            raise ValueError(f"Invalid card value: {card}")
-
-        return int_val
         
     def _draw_or_take_card(self, action, deck, discard_pile):
         if action == 'd':
@@ -468,7 +436,7 @@ class GreedyPlayer(Player):
 
     def _choose_swap_or_discard(self, drawn_card: str):
         """ Chooses to swap card or keep card, based on the top card value."""
-        available_val = self._card_value(drawn_card)
+        available_val = self.game.get_card_value(drawn_card)
         if available_val < 6:
             return 's'
         else:
@@ -482,11 +450,12 @@ class GreedyPlayer(Player):
         if not drawn_card:
             return
         
-        max = -1
+        max_val = -1
+        swap_idx = -1
         for idx in face_down_indices:
-            card_value = self._card_value(self.hand[idx])
-            if card_value > max:
-                max = card_value
+            card_value = self.game.get_card_value(self.hand[idx])
+            if card_value > max_val:
+                max_val = card_value
                 swap_idx = idx
         
         discarded_card = self.hand[swap_idx]
@@ -494,38 +463,51 @@ class GreedyPlayer(Player):
         discard_pile.append(discarded_card)
         self.face_up_indices.add(swap_idx)
 
-    def _turn_card_over(self, drawn_card, face_down_indices, discard_pile):
+    def _turn_card_over(self, face_down_indices):
         if not face_down_indices:
-            logging.debug("All cards are face up. Discarding drawn card.")
-            if drawn_card:
-                discard_pile.append(drawn_card)
+            logging.debug("All cards are face up. Can't turn another one.")
             return
         
-        min = 999
+        min_val = 999
+        turn_over_idx = -1
         for idx in face_down_indices:
-            card_value = self._card_value(self.hand[idx])
-            if card_value < min:
-                min = card_value
-                swap_idx = idx
+            card_value = self.game.get_card_value(self.hand[idx])
+            if card_value < min_val:
+                min_val = card_value
+                turn_over_idx = idx
 
-        self.face_up_indices.add(swap_idx)
-        if drawn_card:
-            discard_pile.append(drawn_card)
-        logging.debug(f"{self.name} turned over card at position {swap_idx}.")
+        self.face_up_indices.add(turn_over_idx)
+        logging.debug(f"{self.name} turned over card at position {turn_over_idx}.")
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)    
     scores = []
-    for i in range(500000):
+    for i in range(100000):
         players = [GreedyPlayer("Alice"), GreedyPlayer("Bob")]
         game = GolfGame(num_players=2, players=players)
 
         scores.append(game.play_game())
-    
+        
+    alice_winrate = sum(
+        1 for t1, t2 in scores if t1[0] == 'Alice' and t1[1] > t2[1]
+        or t2[0] == 'Alice' and t2[1] > t1[1]
+    ) / len(scores) * 100
+
+    draw_rate = sum(
+        1 for t1, t2 in scores if t1[0] == t2[1]
+        ) / len(scores) * 100
+
+    bob_winrate = 100 - alice_winrate - draw_rate
+
     alice_score = sum(score for pair in scores for player_name, score in pair if player_name == 'Alice') / len(scores)
     bob_score = sum(score for pair in scores for player_name, score in pair if player_name == 'Bob') / len(scores)
-    
+
+    logging.info(f"Winrate for Alice: {alice_winrate:.2f}%")
+    logging.info(f"Draw rate: {draw_rate:.2f}%")
+    logging.info(f"Winrate for Bob: {bob_winrate:.2f}%")
+
     logging.info(f"Average score for Alice: {alice_score}")
     logging.info(f"Average score for Bob: {bob_score}")
+
     logging.info("Game simulation complete.")
