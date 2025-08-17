@@ -236,8 +236,9 @@ class HumanPlayer(Player):
             swap_choice = self._choose_swap_or_discard(drawn_card)
             if swap_choice == 's':
                 self._swap_card(drawn_card, face_down_indices, discard_pile)
-            else:
+            else: # In this case, player has to flip one of their own cards.
                 discard_pile.append(drawn_card)
+                self._turn_card_over(face_down_indices)
         
         print("\n" * 50)
         return len(self.face_up_indices) == 4
@@ -268,7 +269,8 @@ class HumanPlayer(Player):
 
     def _choose_swap_or_discard(self, drawn_card):
         if drawn_card:
-            swap_choice = input("Do you want to (s)wap with a card in your hand, or (d)iscard the drawn card? ").lower()
+            swap_choice = input("Do you want to (s)wap with a card in your hand,"
+                "or (d)iscard the drawn card? ").lower()
         else:
             swap_choice = 'd'
         return swap_choice
@@ -349,6 +351,7 @@ class RandomPlayer(Player):
                 self._swap_card(drawn_card, face_down_indices, discard_pile)
             else:
                 discard_pile.append(drawn_card)
+                self._turn_card_over(face_down_indices)
 
         return len(self.face_up_indices) == 4
 
@@ -423,6 +426,7 @@ class GreedyPlayer(Player):
                 self._swap_card(drawn_card, face_down_indices, discard_pile)
             else:
                 discard_pile.append(drawn_card)
+                self._turn_card_over(face_down_indices)
 
         return len(self.face_up_indices) == 4
 
