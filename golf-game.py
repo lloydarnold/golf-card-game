@@ -190,6 +190,17 @@ class HumanPlayer(Player):
     """
     Represents a human player who interacts via the console.
     """
+    def _display_others(self):
+        for player in self.game.players:
+            if player != self:
+                hand = []
+                for i, card in enumerate(player.hand):
+                    if i in player.face_up_indices:
+                        hand.append(card)
+                    else:
+                        hand.append('X')
+                print(f"{player.name}'s hand: {', '.join(hand)}")
+
     def _display_state(self, top_card: str):
         hand_display = []
         for i in range(len(self.hand)):
@@ -200,9 +211,15 @@ class HumanPlayer(Player):
                 else:
                     hand_display.append(f"{card_value} (down)")
             else:
-                hand_display.append('X')
+                if i in self.face_up_indices:
+                    hand_display.append(f"{card_value} (up)")
+                else:
+                    hand_display.append(f"???")       
+        
         print(f"\n--- {self.name}'s Turn ---")
-        print(f"Your Hand: [{', '.join(hand_display)}]")
+        self._display_others()
+
+        print(f"\nYour Hand: [{', '.join(hand_display)}]")
         print(f"Stack: {top_card.split('-')[0]}")
 
     def make_move(self, deck: list, discard_pile: list) -> bool:
@@ -479,9 +496,19 @@ class GreedyPlayer(Player):
         self.face_up_indices.add(turn_over_idx)
         logging.debug(f"{self.name} turned over card at position {turn_over_idx}.")
 
+class NNPlayer(Player):
+    
+    def _display_state(self, top_card: str):
+        """Displays the player's current hand and the discard pile."""
+        raise NotImplementedError("Subclass must implement abstract method _display_state")
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)    
+    def make_move(self, deck: list, discard_pile: list) -> bool:
+        """Handles the player's turn."""
+        raise NotImplementedError("Subclass must implement abstract method make_move")
+
+
+def test_greedy():
+    logging.basicConfig(level=logging.INFO)
     scores = []
     for i in range(100000):
         players = [GreedyPlayer("Alice"), GreedyPlayer("Bob")]
@@ -500,8 +527,14 @@ if __name__ == "__main__":
 
     bob_winrate = 100 - alice_winrate - draw_rate
 
-    alice_score = sum(score for pair in scores for player_name, score in pair if player_name == 'Alice') / len(scores)
-    bob_score = sum(score for pair in scores for player_name, score in pair if player_name == 'Bob') / len(scores)
+    alice_score = sum(score for pair in scores
+                      for player_name, score in pair
+                      if player_name == 'Alice'
+                      ) / len(scores)
+    bob_score = sum(score for pair in scores
+                    for player_name, score in pair
+                    if player_name == 'Bob'
+                    ) / len(scores)
 
     logging.info(f"Winrate for Alice: {alice_winrate:.2f}%")
     logging.info(f"Draw rate: {draw_rate:.2f}%")
@@ -511,3 +544,14 @@ if __name__ == "__main__":
     logging.info(f"Average score for Bob: {bob_score}")
 
     logging.info("Game simulation complete.")
+
+def test_human():
+    players = [HumanPlayer("Alice"), GreedyPlayer("Bob")]
+    game = GolfGame(num_players=2, players=players)
+
+    game.play_game()
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    test_human()
