@@ -1,3 +1,8 @@
+# note - this code adheres poorly to the principle of encapsulation, with game and 
+# player each requiring an inappropriate amount of knowledge about the other.
+# I consider this fine, as mainly coded to get some empirical data about 
+# gameplay
+
 import random
 import logging
 
